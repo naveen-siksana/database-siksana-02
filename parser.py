@@ -1,127 +1,132 @@
-# =====================
-# Database (from Phase 1)
-# =====================
-# Input: table name + list of column names.
-# Output: new empty table stored in your database dict.
-# Check: error if table already exists.
+import re
+from db_operations import create_table, insert, select
 
 
-database = {}
-# columns1 = []
+def normalize_value(raw_value):
+    raw_value = raw_value.strip()
 
-def create_table(database,tableName,col=[]):
-    r = []
-    database[tableName] = {
-        "columns": col,
-        "rows": r
-    }
-    #print(database[tableName])
+    if raw_value.startswith("'") and raw_value.endswith("'"):
+        return raw_value[1:-1]
 
-def insert(database,tableName,r):
-    database[tableName]["rows"] = r
-    #print(database[tableName])
+    if raw_value.isdigit():
+        return int(raw_value)
 
-def print_table(database,tableName):
-    table = database[tableName]
-    cols = table["columns"]
-    rows = table["rows"]
-    print("\t".join(cols))
-    for row in rows:
-        print("\t".join(str(row.get(col,"")) for col in cols))
-
-def select(database, tableName,where,value):
-    for row in database[tableName]["rows"]:
-        if row.get(where) == value:
-            #table = database[tableName][row]
-            #print_table(database,table)
-            print(row)
-
-create_table(database,"users",["id","name"])
-create_table(database,"students",["id","course"])
-insert(database,"users",[{"id":1,"name":"Naveen"}])
-insert(database,"students",[{"id":1,"course":"CS"}])
-#print_table(database,"users")
-select(database,"students","id",1)
+    return raw_value
 
 
-# =====================
-# SQL Parsing
-# =====================
 def parse_create(query):
-    """
-    Example:
-    CREATE TABLE users (id, name);
-    Return -> {"type": "create", "table": "users", "columns": ["id", "name"]}
-    """
-    # TODO: Extract table name + columns
-    return {"type": "create", "table": None, "columns": []}
+    pattern = r"^\s*CREATE\s+TABLE\s+(\w+)\s*\(([^)]+)\)\s*;?\s*$"
+    match = re.match(pattern, query, re.IGNORECASE)
+
+    if not match:
+        raise ValueError("Invalid CREATE TABLE syntax")
+
+    table_name = match.group(1)
+    columns_raw = match.group(2)
+    columns = [col.strip() for col in columns_raw.split(",")]
+
+    return {
+        "type": "create",
+        "table": table_name,
+        "columns": columns
+    }
 
 
 def parse_insert(query):
-    """
-    Example:
-    INSERT INTO users VALUES (1, 'Alice');
-    Return -> {"type": "insert", "table": "users", "values": [1, "Alice"]}
-    """
-    # TODO: Extract table name + values
-    return {"type": "insert", "table": None, "values": []}
+    pattern = r"^\s*INSERT\s+INTO\s+(\w+)\s+VALUES\s*\(([^)]+)\)\s*;?\s*$"
+    match = re.match(pattern, query, re.IGNORECASE)
+
+    if not match:
+        raise ValueError("Invalid INSERT syntax")
+
+    table_name = match.group(1)
+    values_raw = match.group(2)
+    values = [normalize_value(val) for val in values_raw.split(",")]
+
+    return {
+        "type": "insert",
+        "table": table_name,
+        "values": values
+    }
 
 
 def parse_select(query):
-    """
-    Example:
-    SELECT name FROM users WHERE id=2;
-    Return -> {
-      "type": "select",
-      "table": "users",
-      "columns": ["name"],
-      "where": {"id": 2}
+    pattern = r"^\s*SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*('[^']*'|\d+|\w+))?\s*;?\s*$"
+    match = re.match(pattern, query, re.IGNORECASE)
+
+    if not match:
+        raise ValueError("Invalid SELECT syntax")
+
+    columns_raw = match.group(1).strip()
+    table_name = match.group(2)
+    where_column = match.group(3)
+    where_value = match.group(4)
+
+    if columns_raw == "*":
+        columns = "*"
+    else:
+        columns = [col.strip() for col in columns_raw.split(",")]
+
+    where = None
+    if where_column and where_value is not None:
+        where = {
+            "column": where_column,
+            "value": normalize_value(where_value)
+        }
+
+    return {
+        "type": "select",
+        "table": table_name,
+        "columns": columns,
+        "where": where
     }
-    """
-    # TODO: Extract columns, table, and WHERE clause (if any)
-    return {"type": "select", "table": None, "columns": [], "where": None}
 
 
 def parse_sql(query):
-    """
-    Dispatch parser based on SQL keyword.
-    """
-    q = query.strip().lower()
-    if q.startswith("create table"):
+    stripped = query.strip().lower()
+
+    if stripped.startswith("create table"):
         return parse_create(query)
-    elif q.startswith("insert into"):
+
+    if stripped.startswith("insert into"):
         return parse_insert(query)
-    elif q.startswith("select"):
+
+    if stripped.startswith("select"):
         return parse_select(query)
-    else:
-        raise ValueError("Unsupported SQL command")
+
+    raise ValueError("Unsupported SQL command")
 
 
-# =====================
-# Execution Engine
-# =====================
-def execute(query, db):
+def execute(query, database):
     parsed = parse_sql(query)
 
     if parsed["type"] == "create":
-        return create_table(db, parsed["table"], parsed["columns"])
+        return create_table(database, parsed["table"], parsed["columns"])
 
-    elif parsed["type"] == "insert":
-        return insert_into(db, parsed["table"], parsed["values"])
+    if parsed["type"] == "insert":
+        return insert(database, parsed["table"], parsed["values"])
 
-    elif parsed["type"] == "select":
-        return select_from(db, parsed["table"], parsed["columns"], parsed["where"])
+    if parsed["type"] == "select":
+        if parsed["where"] is None:
+            return select(database, parsed["table"], None, None, parsed["columns"])
+        return select(
+            database,
+            parsed["table"],
+            parsed["where"]["column"],
+            parsed["where"]["value"],
+            parsed["columns"]
+        )
 
-    else:
-        raise ValueError("Unknown query type")
+    raise ValueError("Unknown query type")
 
 
-# =====================
-# Example Run (once implemented)
-# =====================
 if __name__ == "__main__":
+    database = {}
+
     execute("CREATE TABLE users (id, name);", database)
     execute("INSERT INTO users VALUES (1, 'Alice');", database)
     execute("INSERT INTO users VALUES (2, 'Bob');", database)
-    result = execute("SELECT name FROM users WHERE id=2;", database)
-    print(result)  # Expected: [{'name': 'Bob'}]
+
+    print(execute("SELECT * FROM users;", database))
+    print(execute("SELECT name FROM users;", database))
+    print(execute("SELECT name FROM users WHERE id=2;", database))
