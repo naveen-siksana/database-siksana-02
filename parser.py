@@ -1,5 +1,4 @@
 import re
-from db_operations import create_table, insert, select
 
 
 def normalize_value(raw_value):
@@ -7,6 +6,7 @@ def normalize_value(raw_value):
 
     if raw_value.startswith("'") and raw_value.endswith("'"):
         return raw_value[1:-1]
+
 
     if raw_value.isdigit():
         return int(raw_value)
@@ -61,6 +61,7 @@ def parse_select(query):
     table_name = match.group(2)
     where_column = match.group(3)
     where_value = match.group(4)
+    print("Where value:", where_value)
 
     if columns_raw == "*":
         columns = "*"
@@ -95,38 +96,3 @@ def parse_sql(query):
         return parse_select(query)
 
     raise ValueError("Unsupported SQL command")
-
-
-def execute(query, database):
-    parsed = parse_sql(query)
-
-    if parsed["type"] == "create":
-        return create_table(database, parsed["table"], parsed["columns"])
-
-    if parsed["type"] == "insert":
-        return insert(database, parsed["table"], parsed["values"])
-
-    if parsed["type"] == "select":
-        if parsed["where"] is None:
-            return select(database, parsed["table"], None, None, parsed["columns"])
-        return select(
-            database,
-            parsed["table"],
-            parsed["where"]["column"],
-            parsed["where"]["value"],
-            parsed["columns"]
-        )
-
-    raise ValueError("Unknown query type")
-
-
-if __name__ == "__main__":
-    database = {}
-
-    execute("CREATE TABLE users (id, name);", database)
-    execute("INSERT INTO users VALUES (1, 'Alice');", database)
-    execute("INSERT INTO users VALUES (2, 'Bob');", database)
-
-    print(execute("SELECT * FROM users;", database))
-    print(execute("SELECT name FROM users;", database))
-    print(execute("SELECT name FROM users WHERE id=2;", database))

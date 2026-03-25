@@ -1,41 +1,50 @@
-# Input: table name + list of column names.
-# Output: new empty table stored in your database dict.
-# Check: error if table already exists.
+#db = {} # Global in-memory database represented as a dictionary
+col = [] # List to hold column names for a table
+row = [] # List to hold row data and each row is a dictionary mapping column names to values
+table = {} # Dictionary to hold table data
 
-
-database = {}
-# columns1 = []
-
-def create_table(database,tableName,col=[]):
-    r = []
-    database[tableName] = {
-        "columns": col,
-        "rows": r
+def create_table(db, table_name, columns):
+    if table_name in db:
+        raise ValueError(f"Table {table_name} already exists.")
+    db[table_name] = {
+        "columns": columns,
+        "rows": []
     }
-    #print(database[tableName])
+    return db
 
-def insert(database,tableName,r):
-    database[tableName]["rows"] = r
-    #print(database[tableName])
+def insert(db, table_name, values):
+    if table_name not in db:
+        raise ValueError(f"Table {table_name} does not exist.")
+    table = db[table_name]
+    if len(values) != len(table["columns"]):
+        raise ValueError("Column count does not match value count.")
+    row = dict(zip(table["columns"], values))
+    table["rows"].append(row)
+    return db
 
-def print_table(database,tableName):
-    table = database[tableName]
-    cols = table["columns"]
-    rows = table["rows"]
-    print("\t".join(cols))
-    for row in rows:
-        print("\t".join(str(row.get(col,"")) for col in cols))
+def select(db, table_name, columns=None, where=None):
+    if table_name not in db:
+        raise ValueError(f"Table {table_name} does not exist.")
+    table = db[table_name]
+    if columns == None or columns == "*":
+        columns = table["columns"]
+        result = []
+        for row in table["rows"]:
+            if where is None or row[where["column"]] == where["value"]:
+                result.append({col: row[col] for col in columns})
+        return result
+    else:
+        result = []
+        for row in table["rows"]:
+            if where is None or row[where["column"]] == where["value"]:
+                result.append({col: row[col] for col in columns})
+        return result
 
-def select(database, tableName,where,value):
-    for row in database[tableName]["rows"]:
-        if row.get(where) == value:
-            #table = database[tableName][row]
-            #print_table(database,table)
-            print(row)
 
-create_table(database,"users",["id","name"])
-create_table(database,"students",["id","course"])
-insert(database,"users",[{"id":1,"name":"Naveen"}])
-insert(database,"students",[{"id":1,"course":"CS"}])
-#print_table(database,"users")
-select(database,"students","id",1)
+
+
+
+
+
+
+
